@@ -1,7 +1,8 @@
 import { BOTTOM_RESERVED_PX } from './layout-calculator';
+import { readPublicEnv } from './runtime-env';
 
-const STORAGE_KEY = 'p2v-global-settings-v2';
-const LEGACY_STORAGE_KEY = 'p2v-global-settings-v1';
+const STORAGE_KEY = 'p2v-global-settings-v3';
+const LEGACY_STORAGE_KEYS = ['p2v-global-settings-v2', 'p2v-global-settings-v1'] as const;
 const STORAGE_VERSION = 3 as const;
 
 export type ExportFormat = 'png' | 'svg';
@@ -40,11 +41,6 @@ type PersistedGlobalSettingsV3 = {
   overrides: Partial<AppGlobalSettings>;
 };
 
-function getRuntimeEnv(): Partial<ImportMetaEnv> {
-  const runtimeMeta = import.meta as ImportMeta & { env?: ImportMetaEnv };
-  return runtimeMeta.env || {};
-}
-
 function clampNumber(
   value: unknown,
   fallback: number,
@@ -70,8 +66,7 @@ function nonEmptyTrimmedString(value: unknown, fallback: string): string {
 }
 
 function resolveDefaultBaseURL(): string {
-  const env = getRuntimeEnv();
-  const envBaseUrl = env.VITE_API_BASE_URL?.trim();
+  const envBaseUrl = readPublicEnv('VITE_API_BASE_URL');
   if (envBaseUrl) return envBaseUrl;
   if (typeof window !== 'undefined') {
     return `${window.location.origin}/api`;
@@ -80,8 +75,7 @@ function resolveDefaultBaseURL(): string {
 }
 
 function resolveDefaultPngRenderer(): PngRenderer {
-  const env = getRuntimeEnv();
-  const raw = env.VITE_PNG_RENDERER_DEFAULT?.trim().toLowerCase();
+  const raw = readPublicEnv('VITE_PNG_RENDERER_DEFAULT').toLowerCase();
   if (raw === 'render-api' || raw === 'backend') return 'render-api';
   return 'browser';
 }
@@ -166,9 +160,7 @@ function parsePersistedSettings(raw: string): Partial<AppGlobalSettings> | null 
   ) {
     return objectValue.overrides as Partial<AppGlobalSettings>;
   }
-
-  // Backward compatibility: old payload is plain settings object.
-  return parsed as Partial<AppGlobalSettings>;
+  return null;
 }
 
 function buildSettingsOverrides(
@@ -215,7 +207,9 @@ function buildSettingsOverrides(
 function removeLegacySettings(): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+    for (const key of LEGACY_STORAGE_KEYS) {
+      window.localStorage.removeItem(key);
+    }
   } catch {
     // ignore
   }
@@ -234,6 +228,11 @@ export function loadGlobalSettings(): AppGlobalSettings {
 
     const parsed = parsePersistedSettings(raw);
     if (!parsed) {
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // ignore
+      }
       removeLegacySettings();
       return defaults;
     }

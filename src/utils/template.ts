@@ -15,6 +15,7 @@ import {
   generateViewportFitScript,
   getStandardTitleConfig,
 } from './layout-calculator';
+import { readPublicEnv, readServerEnv } from './runtime-env';
 
 const DEFAULT_TAILWIND_SCRIPT_URL = 'https://cdn.tailwindcss.com';
 const DEFAULT_MATERIAL_ICONS_URL = 'https://fonts.googleapis.com/icon?family=Material+Icons';
@@ -33,14 +34,11 @@ export function registerTemplateResolver(options: {
 }
 
 function readRuntimeEnvValue(viteKey: string, serverKey: string): string {
-  const metaEnv = ((import.meta as unknown as { env?: Record<string, string | undefined> }).env || {});
-  const fromVite = String(metaEnv[viteKey] || '').trim();
+  const fromVite = readPublicEnv(viteKey);
   if (fromVite) return fromVite;
 
-  if (typeof process !== 'undefined' && process.env) {
-    const fromServer = String(process.env[serverKey] || '').trim();
-    if (fromServer) return fromServer;
-  }
+  const fromServer = readServerEnv(serverKey);
+  if (fromServer) return fromServer;
 
   return '';
 }
