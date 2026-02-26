@@ -1,9 +1,11 @@
 import { BOTTOM_RESERVED_PX } from './layout-calculator';
 import { readPublicEnv } from './runtime-env';
+import { DEFAULT_ICON_CDN_URL, DEFAULT_ICON_FALLBACK } from './icon-mapping';
 
 const STORAGE_KEY = 'p2v-global-settings-v3';
 const LEGACY_STORAGE_KEYS = ['p2v-global-settings-v2', 'p2v-global-settings-v1'] as const;
 const STORAGE_VERSION = 3 as const;
+const MAX_ICON_CDN_URL_LENGTH = 2048;
 
 export type ExportFormat = 'png' | 'svg';
 export type PngRenderer = 'browser' | 'render-api';
@@ -54,15 +56,15 @@ function clampNumber(
   return integer ? Math.round(normalized) : normalized;
 }
 
-function stringOrFallback(value: unknown, fallback: string): string {
-  if (typeof value !== 'string') return fallback;
-  return value;
-}
-
 function nonEmptyTrimmedString(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback;
   const trimmed = value.trim();
   return trimmed || fallback;
+}
+
+function boundedNonEmptyTrimmedString(value: unknown, fallback: string, maxLength: number): string {
+  const normalized = nonEmptyTrimmedString(value, fallback);
+  return normalized.slice(0, maxLength);
 }
 
 function resolveDefaultBaseURL(): string {
@@ -80,6 +82,11 @@ function resolveDefaultPngRenderer(): PngRenderer {
   return 'browser';
 }
 
+function resolveDefaultIconCdnUrl(): string {
+  const envIconCdn = readPublicEnv('VITE_ICON_CDN_URL');
+  return (envIconCdn || DEFAULT_ICON_CDN_URL).slice(0, MAX_ICON_CDN_URL_LENGTH);
+}
+
 export function createDefaultGlobalSettings(): AppGlobalSettings {
   return {
     bottomReservedPx: BOTTOM_RESERVED_PX,
@@ -89,9 +96,9 @@ export function createDefaultGlobalSettings(): AppGlobalSettings {
       baseURL: resolveDefaultBaseURL(),
     },
     iconMapping: {
-      enabled: false,
-      cdnUrl: '',
-      fallbackIcon: 'article',
+      enabled: true,
+      cdnUrl: resolveDefaultIconCdnUrl(),
+      fallbackIcon: DEFAULT_ICON_FALLBACK,
     },
   };
 }
@@ -120,7 +127,11 @@ function sanitizeSettings(
     },
     iconMapping: {
       enabled: typeof iconMappingRaw.enabled === 'boolean' ? iconMappingRaw.enabled : defaults.iconMapping.enabled,
-      cdnUrl: stringOrFallback(iconMappingRaw.cdnUrl, defaults.iconMapping.cdnUrl).trim(),
+      cdnUrl: boundedNonEmptyTrimmedString(
+        iconMappingRaw.cdnUrl,
+        defaults.iconMapping.cdnUrl,
+        MAX_ICON_CDN_URL_LENGTH,
+      ),
       fallbackIcon: nonEmptyTrimmedString(iconMappingRaw.fallbackIcon, defaults.iconMapping.fallbackIcon),
     },
   };

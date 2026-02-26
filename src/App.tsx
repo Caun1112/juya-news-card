@@ -46,6 +46,7 @@ import {
   loadGlobalSettings,
   saveGlobalSettings,
 } from './utils/global-settings';
+import { applyIconMappingToContent } from './utils/icon-resolution';
 import { useAppKeyboardShortcuts } from './hooks/use-app-keyboard-shortcuts';
 import { useCdnIconList } from './hooks/use-cdn-icon-list';
 import mockData from '../tests/mock-data.json';
@@ -60,14 +61,13 @@ DeepSeek-V3 在多个基准测试中表现出色，性能与某些顶尖的闭�
 
 const App: React.FC = () => {
   const defaultMockIndex = MOCK_SCENARIOS.length > 6 ? 6 : MOCK_SCENARIOS.length > 0 ? 0 : null;
+  const initialData = defaultMockIndex !== null ? MOCK_SCENARIOS[defaultMockIndex] : null;
   const [inputText, setInputText] = useState('');
   const [generatedText, setGeneratedText] = useState('');
   const [loading, setLoading] = useState(false);
   const [downloadingHtml, setDownloadingHtml] = useState(false);
   const [downloadingImage, setDownloadingImage] = useState(false);
-  const [data, setData] = useState<GeneratedContent | null>(
-    defaultMockIndex !== null ? MOCK_SCENARIOS[defaultMockIndex] : null
-  );
+  const [data, setData] = useState<GeneratedContent | null>(initialData);
   const [scale, setScale] = useState(0.5);
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE);
   const [currentTemplate, setCurrentTemplate] = useState<TemplateConfig | null>(null);
@@ -79,6 +79,7 @@ const App: React.FC = () => {
   const [backendLlmConfig, setBackendLlmConfig] = useState<BackendLlmRuntimeConfig | null>(null);
   const [backendLlmConfigLoading, setBackendLlmConfigLoading] = useState(false);
   const [backendLlmConfigError, setBackendLlmConfigError] = useState<string | null>(null);
+  const sourceContentRef = useRef<GeneratedContent | null>(initialData);
   const cdnIconList = useCdnIconList(
     Boolean(globalSettings.iconMapping?.enabled),
     globalSettings.iconMapping?.cdnUrl || ''
@@ -192,40 +193,47 @@ const App: React.FC = () => {
   const resolveIcons = useCallback((content: GeneratedContent | null) => {
     if (!content) return content;
     if (!globalSettings.iconMapping?.enabled) return content;
-
-    const fallback = globalSettings.iconMapping.fallbackIcon || 'article';
-
-    return {
-      ...content,
-      cards: content.cards.map(card => {
-        const iconOptions = card.icon.split(',').map(s => s.trim().replaceAll('-', '_').toLowerCase());
-        let matched = '';
-        if (cdnIconSet.size > 0) {
-          matched = iconOptions.find(opt => cdnIconSet.has(opt)) || '';
-        } else {
-          matched = iconOptions[0] || '';
-        }
-        return {
-          ...card,
-          icon: matched || fallback,
-        };
-      })
-    };
+    return applyIconMappingToContent(content, {
+      fallbackIcon: globalSettings.iconMapping.fallbackIcon,
+      cdnIcons: cdnIconSet,
+    });
   }, [cdnIconSet, globalSettings.iconMapping]);
+
+  const updateContent = useCallback((content: GeneratedContent | null) => {
+    sourceContentRef.current = content;
+    setData(resolveIcons(content));
+  }, [resolveIcons]);
+
+  useEffect(() => {
+    setData((prev) => {
+      const source = sourceContentRef.current;
+      const resolved = resolveIcons(source);
+      if (!resolved) return source;
+      if (!prev) return resolved;
+      const changed =
+        prev.mainTitle !== resolved.mainTitle ||
+        prev.cards.length !== resolved.cards.length ||
+        prev.cards.some((card, index) => {
+          const next = resolved.cards[index];
+          return card.title !== next?.title || card.desc !== next?.desc || card.icon !== next?.icon;
+        });
+      return changed ? resolved : prev;
+    });
+  }, [resolveIcons]);
 
   const handleSelectMock = useCallback((index: number) => {
     const mock = MOCK_SCENARIOS[index];
     if (!mock) return;
     setSelectedMockIndex(index);
-    setData(mock);
-  }, []);
+    updateContent(mock);
+  }, [updateContent]);
 
   const handleGenerate = useCallback(async () => {
     if (!inputText.trim()) return;
     setLoading(true);
     try {
       const result = await generateCardContent(inputText, { baseURL: globalSettings.llm.baseURL });
-      setData(resolveIcons(result));
+      updateContent(result);
       setSelectedMockIndex(null);
     } catch (error) {
       console.error(error);
@@ -233,7 +241,7 @@ const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [globalSettings.llm.baseURL, inputText, resolveIcons]);
+  }, [globalSettings.llm.baseURL, inputText, updateContent]);
 
   const triggerGenerate = useCallback(() => {
     void handleGenerate();
@@ -253,12 +261,12 @@ const App: React.FC = () => {
     if (!generatedText.trim()) return;
     const parsed = parseMarkdownToContent(generatedText);
     if (parsed) {
-      setData(resolveIcons(parsed));
+      updateContent(parsed);
       setSelectedMockIndex(null);
     } else {
       alert('无法解析内容，请检查格式是否正确。');
     }
-  }, [generatedText, resolveIcons]);
+  }, [generatedText, updateContent]);
 
   const triggerBlobDownload = useCallback((blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);

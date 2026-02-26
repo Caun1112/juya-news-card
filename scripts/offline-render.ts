@@ -3,6 +3,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
 import { generateTemplateHtml } from '../src/templates/ssr-runtime.js';
+import type { GeneratedContent } from '../src/types';
+import { loadIconCatalogFromCdn } from '../src/utils/icon-cdn-catalog.js';
+import { resolveIconMappingRuntimeConfig } from '../src/utils/icon-config.js';
+import { applyIconMappingToContent } from '../src/utils/icon-resolution.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +19,19 @@ async function main() {
   }
 
   const mockData = JSON.parse(fs.readFileSync(mockDataPath, 'utf-8'));
+  const iconMappingConfig = resolveIconMappingRuntimeConfig(process.env);
+  let cdnIcons: string[] = [];
+  if (iconMappingConfig.enabled) {
+    try {
+      cdnIcons = await loadIconCatalogFromCdn(iconMappingConfig.cdnUrl, {
+        ttlMs: iconMappingConfig.cdnCacheTtlMs,
+        timeoutMs: iconMappingConfig.cdnFetchTimeoutMs,
+      });
+    } catch (error) {
+      console.warn('Failed to refresh icon catalog. Continue with fallback-only mapping.', error);
+    }
+  }
+
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const outputDir = path.join(process.cwd(), `output/offline-test-${timestamp}`);
   fs.mkdirSync(outputDir, { recursive: true });
@@ -43,11 +60,15 @@ async function main() {
     `;
   }
 
-  for (const content of mockData) {
-    const N = content.cards.length;
+  for (const content of mockData as GeneratedContent[]) {
+    const mappedContent = applyIconMappingToContent(content, {
+      fallbackIcon: iconMappingConfig.fallbackIcon,
+      cdnIcons,
+    });
+    const N = mappedContent.cards.length;
     console.log(`Rendering ${N} cards...`);
 
-    const html = generateTemplateHtml(content);
+    const html = generateTemplateHtml(mappedContent);
     const finalHtml = fontFace ? html.replace('</head>', `${fontFace}</head>`) : html;
 
     const context = await browser.newContext({

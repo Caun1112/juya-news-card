@@ -17,6 +17,10 @@ import { chromium } from 'playwright';
 import minimist from 'minimist';
 import { generateHtmlFromReactComponent } from '../server/ssr-helper.js';
 import { TEMPLATES } from '../src/templates/index.js';
+import type { GeneratedContent } from '../src/types';
+import { loadIconCatalogFromCdn } from '../src/utils/icon-cdn-catalog.js';
+import { resolveIconMappingRuntimeConfig } from '../src/utils/icon-config.js';
+import { applyIconMappingToContent } from '../src/utils/icon-resolution.js';
 
 // 导入 mock 数据
 import mockData from '../tests/mock-data.json';
@@ -36,6 +40,32 @@ if (args['list-themes']) {
 
 // 默认主题为 googleMaterial
 const DEFAULT_THEME = 'googleMaterial';
+
+type IconMappingOptions = {
+  fallbackIcon: string;
+  cdnIcons: string[];
+};
+
+const ICON_MAPPING_CONFIG = resolveIconMappingRuntimeConfig(process.env);
+
+async function resolveIconMappingOptions(): Promise<IconMappingOptions> {
+  let cdnIcons: string[] = [];
+  if (ICON_MAPPING_CONFIG.enabled) {
+    try {
+      cdnIcons = await loadIconCatalogFromCdn(ICON_MAPPING_CONFIG.cdnUrl, {
+        ttlMs: ICON_MAPPING_CONFIG.cdnCacheTtlMs,
+        timeoutMs: ICON_MAPPING_CONFIG.cdnFetchTimeoutMs,
+      });
+    } catch (error) {
+      console.warn('Failed to refresh icon catalog. Continue with fallback-only mapping.', error);
+    }
+  }
+
+  return {
+    fallbackIcon: ICON_MAPPING_CONFIG.fallbackIcon,
+    cdnIcons,
+  };
+}
 
 // 获取要测试的主题列表
 function getThemesToTest(): string[] {
@@ -58,12 +88,14 @@ async function generateForMockData(
   cardCount: number,
   themeId: string,
   outputDir: string,
-  browser: any
+  browser: any,
+  iconMappingOptions: IconMappingOptions,
 ) {
-  console.log(`  [${cardCount} Cards] ${mockItem.mainTitle}`);
+  const mappedItem = applyIconMappingToContent(mockItem as GeneratedContent, iconMappingOptions);
+  console.log(`  [${cardCount} Cards] ${mappedItem.mainTitle}`);
 
   try {
-    const html = generateHtmlFromReactComponent(mockItem, themeId);
+    const html = generateHtmlFromReactComponent(mappedItem, themeId);
 
     // 使用 Playwright 截图
     const context = await browser.newContext({
@@ -105,7 +137,7 @@ async function generateForMockData(
     // 保存 HTML 和数据
     const subDir = path.join(outputDir, `data-${cardCount}`);
     fs.mkdirSync(subDir, { recursive: true });
-    fs.writeFileSync(path.join(subDir, 'content.json'), JSON.stringify(mockItem, null, 2));
+    fs.writeFileSync(path.join(subDir, 'content.json'), JSON.stringify(mappedItem, null, 2));
     fs.writeFileSync(path.join(subDir, 'page.html'), html);
 
     await context.close();
@@ -119,7 +151,12 @@ async function generateForMockData(
 /**
  * 测试单个主题
  */
-async function testTheme(themeId: string, baseOutputDir: string, browser: any) {
+async function testTheme(
+  themeId: string,
+  baseOutputDir: string,
+  browser: any,
+  iconMappingOptions: IconMappingOptions,
+) {
   console.log(`\n📦 Testing theme: ${themeId}`);
 
   const themeOutputDir = path.join(baseOutputDir, themeId);
@@ -129,12 +166,13 @@ async function testTheme(themeId: string, baseOutputDir: string, browser: any) {
   for (let i = 0; i < mockData.length; i++) {
     const mockItem = mockData[i];
     const cardCount = i + 1;
-    await generateForMockData(mockItem, cardCount, themeId, themeOutputDir, browser);
+    await generateForMockData(mockItem, cardCount, themeId, themeOutputDir, browser, iconMappingOptions);
   }
 }
 
 async function main() {
   const themesToTest = getThemesToTest();
+  const iconMappingOptions = await resolveIconMappingOptions();
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const baseOutputDir = path.join(process.cwd(), `output/batch-test-${timestamp}`);
   fs.mkdirSync(baseOutputDir, { recursive: true });
@@ -149,7 +187,7 @@ async function main() {
   const browser = await chromium.launch();
 
   for (const themeId of themesToTest) {
-    await testTheme(themeId, baseOutputDir, browser);
+    await testTheme(themeId, baseOutputDir, browser, iconMappingOptions);
   }
 
   await browser.close();

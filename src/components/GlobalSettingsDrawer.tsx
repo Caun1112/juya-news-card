@@ -17,6 +17,15 @@ import type { AppGlobalSettings } from '../utils/global-settings';
 import { EXPORT_FORMAT_OPTIONS, PNG_RENDERER_OPTIONS } from '../utils/global-settings';
 import type { BackendLlmRuntimeConfig } from '../services/backend-config-service';
 import { md3Colors } from '../theme/md3-theme';
+import {
+  DEFAULT_ICON_CDN_URL,
+  DEFAULT_ICON_FALLBACK,
+  isSupportedIconCdnUrl,
+  isValidIconToken,
+  normalizeIconToken,
+} from '../utils/icon-mapping';
+
+const MAX_ICON_CDN_URL_LENGTH = 2048;
 
 interface GlobalSettingsDrawerProps {
   open: boolean;
@@ -57,6 +66,16 @@ const GlobalSettingsDrawer: React.FC<GlobalSettingsDrawerProps> = ({
     const text = String(value ?? '').trim();
     return text || fallback;
   };
+
+  const iconCdnUrl = settings.iconMapping.cdnUrl.trim();
+  const fallbackIcon = settings.iconMapping.fallbackIcon.trim();
+  const fallbackIconPreview = normalizeIconToken(fallbackIcon, DEFAULT_ICON_FALLBACK);
+  const hasIconCdnUrlError = Boolean(settings.iconMapping.enabled && !isSupportedIconCdnUrl(iconCdnUrl));
+  const hasFallbackIconError = Boolean(
+    settings.iconMapping.enabled &&
+    fallbackIcon &&
+    !isValidIconToken(fallbackIcon),
+  );
 
   return (
     <Drawer
@@ -337,7 +356,17 @@ const GlobalSettingsDrawer: React.FC<GlobalSettingsDrawerProps> = ({
               fullWidth
               label="CDN URL (JSON array)"
               value={settings.iconMapping.cdnUrl}
-              onChange={(event) => onUpdateIconMappingSetting('cdnUrl', event.target.value)}
+              onChange={(event) =>
+                onUpdateIconMappingSetting('cdnUrl', event.target.value.slice(0, MAX_ICON_CDN_URL_LENGTH))
+              }
+              inputProps={{ maxLength: MAX_ICON_CDN_URL_LENGTH }}
+              error={hasIconCdnUrlError}
+              placeholder={DEFAULT_ICON_CDN_URL}
+              helperText={
+                hasIconCdnUrlError
+                  ? '请输入 http(s) URL 或 /icons.json 路径。'
+                  : '支持 JSON 数组 / { icons: [...] } / codepoints 文本。'
+              }
             />
             <TextField
               size="small"
@@ -345,6 +374,12 @@ const GlobalSettingsDrawer: React.FC<GlobalSettingsDrawerProps> = ({
               label="Fallback Icon"
               value={settings.iconMapping.fallbackIcon}
               onChange={(event) => onUpdateIconMappingSetting('fallbackIcon', event.target.value)}
+              error={hasFallbackIconError}
+              helperText={
+                hasFallbackIconError
+                  ? '图标名需为 snake_case，例如 article / trending_up / auto_awesome'
+                  : `Normalized: ${fallbackIconPreview}`
+              }
             />
             <Typography variant="caption" sx={{ color: md3Colors.surface.onSurfaceVariant }}>
               Loaded icons: {cdnIconCount}

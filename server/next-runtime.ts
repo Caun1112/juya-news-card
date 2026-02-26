@@ -5,6 +5,10 @@ import type { GeneratedContent } from '../src/types';
 import { parseJsonToContent, parseMarkdownToContent } from '../src/utils/markdown-content';
 import { sanitizeDescHtml } from '../src/utils/desc-format';
 import { DEFAULT_SYSTEM_PROMPT } from '../src/services/llm-prompt';
+import { DEFAULT_ICON_FALLBACK, normalizeIconToken, splitIconCandidates } from '../src/utils/icon-mapping';
+import { loadIconCatalogFromCdn } from '../src/utils/icon-cdn-catalog';
+import { resolveIconMappingRuntimeConfig } from '../src/utils/icon-config';
+import { applyIconMappingToContent } from '../src/utils/icon-resolution';
 import { generateHtmlFromReactComponent } from './ssr-helper';
 
 type Json = Record<string, unknown>;
@@ -70,10 +74,34 @@ const LLM_ALLOWED_MODELS = (() => {
 const ALLOW_UNAUTHENTICATED_WRITE = parseBoolEnv('ALLOW_UNAUTHENTICATED_WRITE', process.env.NODE_ENV !== 'production');
 const API_BEARER_TOKEN = readEnv('API_BEARER_TOKEN');
 const MAX_INPUT_TEXT_CHARS = parseIntEnv('MAX_INPUT_TEXT_CHARS', 12000, 100, 100000);
+const ICON_MAPPING_CONFIG = resolveIconMappingRuntimeConfig(process.env, {
+  strict: true,
+});
 
-function normalizeIcon(value: string, fallback = 'article'): string {
-  const token = String(value || '').trim().toLowerCase().replaceAll('-', '_');
-  return /^[a-z0-9_,\s]{2,150}$/i.test(token) ? token : fallback;
+function normalizeIconCandidates(value: unknown, fallback = DEFAULT_ICON_FALLBACK): string {
+  const candidates = splitIconCandidates(value);
+  if (candidates.length > 0) return candidates.join(',');
+  if (!String(fallback || '').trim()) return '';
+  return normalizeIconToken(fallback, DEFAULT_ICON_FALLBACK);
+}
+
+async function applyServerIconMapping(content: GeneratedContent): Promise<GeneratedContent> {
+  if (!ICON_MAPPING_CONFIG.enabled) {
+    return applyIconMappingToContent(content, { fallbackIcon: ICON_MAPPING_CONFIG.fallbackIcon });
+  }
+
+  try {
+    const cdnIcons = await loadIconCatalogFromCdn(ICON_MAPPING_CONFIG.cdnUrl, {
+      ttlMs: ICON_MAPPING_CONFIG.cdnCacheTtlMs,
+      timeoutMs: ICON_MAPPING_CONFIG.cdnFetchTimeoutMs,
+    });
+    return applyIconMappingToContent(content, {
+      fallbackIcon: ICON_MAPPING_CONFIG.fallbackIcon,
+      cdnIcons,
+    });
+  } catch {
+    return applyIconMappingToContent(content, { fallbackIcon: ICON_MAPPING_CONFIG.fallbackIcon });
+  }
 }
 
 function extractLlmText(response: unknown): string {
@@ -198,7 +226,7 @@ export async function generateContent(inputTextRaw: unknown, authHeader: string 
   if (!content) {
     throw new Error('LLM returned an unsupported payload format');
   }
-  return content;
+  return applyServerIconMapping(content);
 }
 
 function parseRenderRequest(body: Json): RenderRequestBody {
@@ -211,7 +239,7 @@ function parseRenderRequest(body: Json): RenderRequestBody {
       return {
         title: String(card.title || '').trim(),
         desc: sanitizeDescHtml(String(card.desc || '').trim()),
-        icon: normalizeIcon(String(card.icon || '').trim()),
+        icon: normalizeIconCandidates(String(card.icon || '').trim(), ICON_MAPPING_CONFIG.fallbackIcon),
       };
     }),
     dpr: body.dpr === 2 ? 2 : 1,
@@ -245,13 +273,12 @@ export async function renderPng(body: Json, authHeader: string | null): Promise<
     throw new Error(validationError);
   }
 
-  const html = generateHtmlFromReactComponent(
-    {
-      mainTitle: req.mainTitle,
-      cards: req.cards.map(card => ({ ...card })),
-    },
-    req.templateId,
-  );
+  const mappedContent = await applyServerIconMapping({
+    mainTitle: req.mainTitle,
+    cards: req.cards.map(card => ({ ...card })),
+  });
+
+  const html = generateHtmlFromReactComponent(mappedContent, req.templateId);
 
   const browser = await chromium.launch({
     headless: true,

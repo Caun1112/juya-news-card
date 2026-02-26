@@ -7,6 +7,9 @@ import dotenv from 'dotenv';
 import { generateTemplateHtml } from '../src/templates/ssr-runtime.js';
 import { sanitizeDescHtml } from '../src/utils/desc-format.js';
 import type { GeneratedContent } from '../src/types';
+import { loadIconCatalogFromCdn } from '../src/utils/icon-cdn-catalog.js';
+import { resolveIconMappingRuntimeConfig } from '../src/utils/icon-config.js';
+import { applyIconMappingToContent } from '../src/utils/icon-resolution.js';
 
 // Load environment variables
 dotenv.config();
@@ -18,6 +21,7 @@ const __dirname = path.dirname(__filename);
 const API_KEY = process.env.LLM_API_KEY || process.env.VITE_API_KEY;
 const BASE_URL = process.env.LLM_API_BASE_URL || process.env.VITE_API_BASE_URL;
 const MODEL = process.env.LLM_MODEL || process.env.VITE_API_MODEL || 'gpt-4o-mini';
+const ICON_MAPPING_CONFIG = resolveIconMappingRuntimeConfig(process.env);
 
 if (!API_KEY) {
   console.error('Error: LLM_API_KEY is not set (check .env or .env.local).');
@@ -102,14 +106,31 @@ Return ONLY raw JSON, no other text.`;
           return {
             title: typeof obj.title === 'string' ? obj.title : '',
             desc: sanitizeDescHtml(obj.desc),
-            icon: typeof obj.icon === 'string' ? obj.icon : 'article',
+            icon: typeof obj.icon === 'string' ? obj.icon : '',
           };
         })
         : [],
     };
 
+    let cdnIcons: string[] = [];
+    if (ICON_MAPPING_CONFIG.enabled) {
+      try {
+        cdnIcons = await loadIconCatalogFromCdn(ICON_MAPPING_CONFIG.cdnUrl, {
+          ttlMs: ICON_MAPPING_CONFIG.cdnCacheTtlMs,
+          timeoutMs: ICON_MAPPING_CONFIG.cdnFetchTimeoutMs,
+        });
+      } catch (error) {
+        console.warn('Failed to refresh icon catalog. Continue with fallback-only mapping.', error);
+      }
+    }
+
+    const finalContent = applyIconMappingToContent(normalizedContent, {
+      fallbackIcon: ICON_MAPPING_CONFIG.fallbackIcon,
+      cdnIcons,
+    });
+
     console.log('--- 2. Generating HTML ---');
-    const html = generateTemplateHtml(normalizedContent);
+    const html = generateTemplateHtml(finalContent);
     const htmlPath = path.join(outputDir, 'news-card.html');
     fs.writeFileSync(htmlPath, html);
     console.log(`Saved HTML to ${htmlPath}`);

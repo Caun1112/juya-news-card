@@ -128,3 +128,53 @@ test('custom backend base url override remains stable after runtime origin chang
     uninstallWindow();
   }
 });
+
+test('loadGlobalSettings enables icon mapping defaults with builtin CDN + fallback icon', () => {
+  installWindow('http://example.test:3000');
+  try {
+    const loaded = loadGlobalSettings();
+    assert.equal(loaded.iconMapping.enabled, true);
+    assert.ok(loaded.iconMapping.cdnUrl.includes('MaterialIcons-Regular.codepoints'));
+    assert.equal(loaded.iconMapping.fallbackIcon, 'article');
+  } finally {
+    uninstallWindow();
+  }
+});
+
+test('loadGlobalSettings reads NEXT_PUBLIC_ICON_CDN_URL as default icon catalog', () => {
+  const previous = process.env.NEXT_PUBLIC_ICON_CDN_URL;
+  process.env.NEXT_PUBLIC_ICON_CDN_URL = 'https://cdn.example.test/icons.txt';
+  installWindow('http://example.test:3000');
+  try {
+    const loaded = loadGlobalSettings();
+    assert.equal(loaded.iconMapping.cdnUrl, 'https://cdn.example.test/icons.txt');
+  } finally {
+    if (typeof previous === 'string') {
+      process.env.NEXT_PUBLIC_ICON_CDN_URL = previous;
+    } else {
+      delete process.env.NEXT_PUBLIC_ICON_CDN_URL;
+    }
+    uninstallWindow();
+  }
+});
+
+test('saveGlobalSettings clamps icon CDN url length', () => {
+  const windowMock = installWindow('http://example.test:3000');
+  try {
+    const loaded = loadGlobalSettings();
+    const longUrl = `https://cdn.example.test/${'x'.repeat(3000)}`;
+    const saved = saveGlobalSettings({
+      ...loaded,
+      iconMapping: {
+        ...loaded.iconMapping,
+        cdnUrl: longUrl,
+      },
+    });
+
+    assert.equal(saved.iconMapping.cdnUrl.length, 2048);
+    const raw = windowMock.localStorage.getItem(STORAGE_KEY);
+    assert.ok(raw);
+  } finally {
+    uninstallWindow();
+  }
+});
