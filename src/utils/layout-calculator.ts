@@ -7,7 +7,7 @@
 
 import type { GeneratedContent } from '../types';
 
-export const BOTTOM_RESERVED_PX = 100;
+export const BOTTOM_RESERVED_PX = 0;
 
 // ============================================================================
 // 通用布局配置类型
