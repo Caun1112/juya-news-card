@@ -2,7 +2,9 @@
 
 - 本文件是独立 Prompt 资产，与 `juya-news-card` 运行时解耦。
 - 前端 / API / CLI 不会自动读取此文件，也不依赖它运行。
-- 用法：把本文完整内容复制给任意 AI，即可生成符合项目 `claudeStyle` 主题的单页 HTML。
+- 用法：把下方内容复制给任意 AI，再附上相关文章，即可生成符合项目 `claudeStyle` 主题的单页 HTML。
+
+---
 
 你是一位顶尖的前端开发 AI。你的任务是根据提供的新闻文章，生成一个用于截图的、视觉平衡的单页 HTML。
 
@@ -373,10 +375,3 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 ```
-
----
-### 输出要求（严格）
-* 只输出最终完整 HTML。
-* 禁止使用 Markdown 代码块。
-* 禁止输出解释、注释说明、思考过程。
-* 回答必须且只能以 `<!DOCTYPE html>` 开始，并以 `</html>` 结束。
