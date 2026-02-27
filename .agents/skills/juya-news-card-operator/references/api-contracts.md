@@ -54,6 +54,26 @@ Example:
 curl http://127.0.0.1:3000/api/config
 ```
 
+Response JSON:
+
+```json
+{
+  "llm": {
+    "allowClientLlmSettings": false,
+    "model": "string",
+    "temperature": 0.7,
+    "topP": 1,
+    "maxTokens": 0,
+    "timeoutMs": 120000,
+    "maxRetries": 2,
+    "hasCustomBaseURL": true,
+    "allowedModels": ["string"]
+  }
+}
+```
+
+Note: `hasCustomBaseURL` is a boolean indicating whether a custom LLM upstream URL is configured. The actual URL is never exposed to the client.
+
 ## `POST /api/generate`
 
 Extract structured `{ mainTitle, cards[] }` from raw news text.

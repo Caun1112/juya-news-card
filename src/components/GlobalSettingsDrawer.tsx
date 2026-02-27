@@ -305,8 +305,8 @@ const GlobalSettingsDrawer: React.FC<GlobalSettingsDrawerProps> = ({
         <TextField
           size="small"
           fullWidth
-          label="Server LLM Base URL"
-          value={readOnlyValue(backendLlmConfig?.baseURL)}
+          label="Server Custom Base URL"
+          value={backendLlmConfig ? (backendLlmConfig.hasCustomBaseURL ? 'Configured' : 'Default') : 'N/A'}
           InputProps={{ readOnly: true }}
         />
         <TextField

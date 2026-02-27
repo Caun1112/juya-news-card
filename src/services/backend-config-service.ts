@@ -13,7 +13,7 @@ export interface BackendLlmRuntimeConfig {
   maxTokens: number;
   timeoutMs: number;
   maxRetries: number;
-  baseURL: string;
+  hasCustomBaseURL: boolean;
   allowedModels: string[];
 }
 
@@ -117,7 +117,7 @@ export async function fetchBackendLlmRuntimeConfig(configuredBaseUrl?: string): 
     maxTokens: Math.max(0, Math.round(toFiniteNumber(llm.maxTokens, 0))),
     timeoutMs: Math.max(1000, Math.round(toFiniteNumber(llm.timeoutMs, 60000))),
     maxRetries: Math.max(0, Math.round(toFiniteNumber(llm.maxRetries, 0))),
-    baseURL: toStringValue(llm.baseURL, ''),
+    hasCustomBaseURL: toBoolean(llm.hasCustomBaseURL, false),
     allowedModels: toStringArray(llm.allowedModels),
   };
 }

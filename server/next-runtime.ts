@@ -154,7 +154,7 @@ export function buildPublicConfig(): Json {
       maxTokens: LLM_MAX_TOKENS_DEFAULT,
       timeoutMs: LLM_TIMEOUT_MS_DEFAULT,
       maxRetries: LLM_MAX_RETRIES_DEFAULT,
-      baseURL: LLM_API_BASE_URL,
+      hasCustomBaseURL: Boolean(LLM_API_BASE_URL),
       allowedModels: [...LLM_ALLOWED_MODELS],
     },
   };
@@ -215,10 +215,12 @@ export async function generateContent(inputTextRaw: unknown, authHeader: string 
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `LLM upstream request failed: ${message}. ` +
-      `baseURL=${LLM_API_BASE_URL || 'default'} model=${LLM_MODEL_DEFAULT}`,
-    );
+    console.error('LLM upstream request failed', {
+      message,
+      hasCustomBaseURL: Boolean(LLM_API_BASE_URL),
+      model: LLM_MODEL_DEFAULT,
+    });
+    throw new Error('LLM upstream request failed');
   }
 
   const rawText = extractLlmText(response);

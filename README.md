@@ -131,7 +131,7 @@ ALLOW_UNAUTHENTICATED_WRITE=false
 
 ## API
 - `GET /api/healthz` 或 `GET /healthz`：健康检查
-- `GET /api/config`：返回后端当前生效配置（含 LLM 只读信息，不含密钥）
+- `GET /api/config`：返回后端当前生效配置（含 LLM 只读参数，不含密钥和内部 URL；`hasCustomBaseURL` 仅为布尔值）
 - `GET /api/themes`：SSR 可用主题列表
 - `POST /api/generate`：LLM 生成结构化卡片
 - `POST /api/render`：渲染 PNG
