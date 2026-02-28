@@ -26,6 +26,9 @@ output/*
 # Generated previews
 card-*.png
 
+# Claude Code
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
