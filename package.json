@@ -40,7 +40,7 @@
     "@zumer/snapdom": "^2.0.2",
     "html2canvas": "^1.4.1",
     "minimist": "^1.2.8",
-    "next": "^15.2.4",
+    "next": "15.4.11",
     "openai": "^4.83.0",
     "playwright": "^1.57.0",
     "react": "^19.2.3",
