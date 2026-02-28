@@ -685,22 +685,3 @@ export const md3Colors = {
   surface: surfacePalette,
   tones,
 };
-
-// 导出 Typography Scale 常量
-export const md3TypeScale = {
-  displayLarge: { fontSize: 57, fontWeight: 400, lineHeight: 1.12 },
-  displayMedium: { fontSize: 45, fontWeight: 400, lineHeight: 1.16 },
-  displaySmall: { fontSize: 36, fontWeight: 400, lineHeight: 1.22 },
-  headlineLarge: { fontSize: 32, fontWeight: 400, lineHeight: 1.25 },
-  headlineMedium: { fontSize: 28, fontWeight: 400, lineHeight: 1.29 },
-  headlineSmall: { fontSize: 24, fontWeight: 400, lineHeight: 1.33 },
-  titleLarge: { fontSize: 22, fontWeight: 400, lineHeight: 1.27 },
-  titleMedium: { fontSize: 16, fontWeight: 500, lineHeight: 1.5 },
-  titleSmall: { fontSize: 14, fontWeight: 500, lineHeight: 1.43 },
-  bodyLarge: { fontSize: 16, fontWeight: 400, lineHeight: 1.5 },
-  bodyMedium: { fontSize: 14, fontWeight: 400, lineHeight: 1.43 },
-  bodySmall: { fontSize: 12, fontWeight: 400, lineHeight: 1.33 },
-  labelLarge: { fontSize: 14, fontWeight: 500, lineHeight: 1.43 },
-  labelMedium: { fontSize: 12, fontWeight: 500, lineHeight: 1.33 },
-  labelSmall: { fontSize: 11, fontWeight: 500, lineHeight: 1.45 },
-};

@@ -205,45 +205,6 @@ export function getStandardTitleConfig(cardCount: number, config?: Partial<Stand
 
 
 // ============================================================================
-// Terminal CLI 主题布局计算
-// ============================================================================
-
-/**
- * 计算 Terminal CLI 主题的布局配置
- */
-export function calculateTerminalCliLayout(cardCount: number): CardLayoutConfig {
-    if (cardCount <= 3) {
-        return {
-            cardWidthClass: cardCount === 1 ? 'w-2/3' : (cardCount === 2 ? 'card-width-2col' : 'card-width-3col'),
-            titleSizeClass: 'text-4xl',
-            descSizeClass: 'text-xl',
-            iconSize: '40px',
-            wrapperGap: '48px',
-            containerGap: '16px',
-            cardPadding: '24px',
-        };
-    } else if (cardCount <= 6) {
-        return {
-            cardWidthClass: cardCount === 4 ? 'card-width-2col' : 'card-width-3col',
-            titleSizeClass: 'text-3xl',
-            descSizeClass: 'text-lg',
-            iconSize: '36px',
-            wrapperGap: '40px',
-            containerGap: '14px',
-            cardPadding: '20px',
-        };
-    } else {
-        return {
-            cardWidthClass: 'card-width-4col',
-            titleSizeClass: 'text-2xl',
-            descSizeClass: 'text-base',
-            iconSize: '32px',
-            wrapperGap: '36px',
-            containerGap: '12px',
-            cardPadding: '16px',
-        };
-    }
-}
 
 // ============================================================================
 // News Card 主题布局计算

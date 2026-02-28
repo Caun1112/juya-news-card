@@ -421,14 +421,3 @@ export async function generateImageFromPreview(
     cleanup?.();
   }
 }
-
-/**
- * Export PNG from preview (backward compatible wrapper)
- * @deprecated Use generateImageFromPreview instead
- */
-export async function generatePngBlobFromPreview(
-  options: Omit<GeneratePreviewImageOptions, 'format'>
-): Promise<Blob> {
-  const result = await generateImageFromPreview({ ...options, format: 'png' });
-  return result.blob;
-}

@@ -491,17 +491,3 @@ export const TEMPLATES: TemplateMap = {
 };
 
 export { DEFAULT_TEMPLATE } from './catalog';
-
-/**
- * 获取模板列表
- */
-export const getTemplateList = (): TemplateConfig[] => {
-  return Object.values(TEMPLATES);
-};
-
-/**
- * 根据 ID 获取模板
- */
-export const getTemplate = (id: string): TemplateConfig | undefined => {
-  return TEMPLATES[id];
-};

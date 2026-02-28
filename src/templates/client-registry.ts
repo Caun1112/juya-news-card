@@ -44,10 +44,6 @@ export function getTemplateSummaries(): Record<string, TemplateSummary> {
   return TEMPLATE_SUMMARIES;
 }
 
-export function getTemplateSummary(templateId: string): TemplateSummary | undefined {
-  return TEMPLATE_SUMMARIES[templateId];
-}
-
 export function getTemplateIds(): string[] {
   return Object.keys(TEMPLATE_SUMMARIES);
 }
