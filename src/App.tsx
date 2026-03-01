@@ -30,6 +30,7 @@ import {
 import { GeneratedContent } from './types';
 import Canvas from './components/Canvas';
 import GlobalSettingsDrawer from './components/GlobalSettingsDrawer';
+import { useExportToast } from './components/ExportToastProvider';
 import TemplateSelector from './components/TemplateSelector';
 import type { TemplateConfig } from './templates/types';
 import {
@@ -60,6 +61,7 @@ DeepSeek-V3 在多个基准测试中表现出色，性能与某些顶尖的闭�
 成本方面，DeepSeek-V3 仅耗费 278.8 万 H800 GPU 小时，总训练成本约 557.6 万美元，远低于同类顶级模型。`;
 
 const App: React.FC = () => {
+  const { showToast } = useExportToast();
   const defaultMockIndex = MOCK_SCENARIOS.length > 6 ? 6 : MOCK_SCENARIOS.length > 0 ? 0 : null;
   const initialData = defaultMockIndex !== null ? MOCK_SCENARIOS[defaultMockIndex] : null;
   const [inputText, setInputText] = useState('');
@@ -310,46 +312,48 @@ const App: React.FC = () => {
   const handleDownloadImage = async () => {
     if (!data) return;
     if (!currentTemplate) {
-      alert('模板仍在加载，请稍后重试。');
+      showToast('模板仍在加载，请稍后重试。', 'warning');
       return;
     }
     if (!currentTemplate.downloadable) {
-      alert(`"${templateDisplayName}" 模板暂不支持下载。`);
+      showToast(`"${templateDisplayName}" 模板暂不支持下载。`, 'warning');
       return;
     }
 
     setDownloadingImage(true);
     try {
-      // Optionally align PNG export with batch-generate path: SSR HTML + Playwright (render-api).
-      if (globalSettings.exportFormat === 'png' && globalSettings.pngRenderer === 'render-api') {
-        try {
-          const { generatePngBlobFromRenderApi } = await import('./utils/export-render-api-image');
-          const blob = await generatePngBlobFromRenderApi({
-            templateId,
-            data,
-            dpr: 2,
-          });
-          triggerBlobDownload(blob, `${templateId}-${Date.now()}.png`);
-          return;
-        } catch (error) {
-          console.warn('[export] render-api PNG failed, falling back to browser renderer.', error);
-        }
-      }
-
-      const { generateImageFromPreview } = await import('./utils/export-preview-image');
-      const result = await generateImageFromPreview({
+      const { executeExport } = await import('./utils/export-strategy');
+      const result = await executeExport({
         template: currentTemplate,
+        templateId,
         data,
-        scale: 1,
         format: globalSettings.exportFormat,
+        strategy: globalSettings.pngExportStrategy,
+        scale: 1,
         pixelRatio: 2,
         waitForLayoutMs: 420,
         bottomReservedPx: globalSettings.bottomReservedPx,
       });
+
       triggerBlobDownload(result.blob, result.filename);
+
+      // Log structured trace for debugging
+      if (result.metadata.attemptTrace.length > 0) {
+        console.info('[export] attempt trace:', result.metadata.attemptTrace);
+      }
+
+      // Show fallback notification if applicable
+      if (result.metadata.fallbackReason) {
+        const source = result.metadata.renderSource;
+        showToast(
+          `导出回退：已使用 ${source} 完成导出。原因: ${result.metadata.fallbackReason}`,
+          'warning',
+        );
+      }
     } catch (error) {
-      console.error('Image export failed.', error);
-      alert('导出图片失败，请稍后重试。');
+      console.error('[export] Image export failed.', error);
+      const message = error instanceof Error ? error.message : '未知错误';
+      showToast(`导出图片失败: ${message}`, 'error');
     } finally {
       setDownloadingImage(false);
     }

@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import { Tune } from '@mui/icons-material';
 import type { AppGlobalSettings } from '../utils/global-settings';
-import { EXPORT_FORMAT_OPTIONS, PNG_RENDERER_OPTIONS } from '../utils/global-settings';
+import { EXPORT_FORMAT_OPTIONS, PNG_EXPORT_STRATEGY_OPTIONS } from '../utils/global-settings';
 import type { BackendLlmRuntimeConfig } from '../services/backend-config-service';
 import { md3Colors } from '../theme/md3-theme';
 import {
@@ -189,18 +189,18 @@ const GlobalSettingsDrawer: React.FC<GlobalSettingsDrawerProps> = ({
           </Select>
         </FormControl>
         <FormControl size="small" fullWidth disabled={settings.exportFormat !== 'png'}>
-          <InputLabel>PNG Renderer</InputLabel>
+          <InputLabel>PNG Export Strategy</InputLabel>
           <Select
-            value={settings.pngRenderer}
-            label="PNG Renderer"
+            value={settings.pngExportStrategy}
+            label="PNG Export Strategy"
             onChange={(event) =>
               onUpdateSettings(prev => ({
                 ...prev,
-                pngRenderer: event.target.value as AppGlobalSettings['pngRenderer'],
+                pngExportStrategy: event.target.value as AppGlobalSettings['pngExportStrategy'],
               }))
             }
           >
-            {PNG_RENDERER_OPTIONS.map((opt) => (
+            {PNG_EXPORT_STRATEGY_OPTIONS.map((opt) => (
               <MenuItem key={opt.value} value={opt.value}>
                 <Box>
                   <Typography variant="body2">{opt.label}</Typography>

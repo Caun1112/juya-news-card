@@ -3,6 +3,8 @@ import type { TemplateConfig } from '../templates/types';
 import type { GeneratedContent } from '../types';
 import { BOTTOM_RESERVED_PX } from './layout-calculator';
 import type { ExportFormat } from './global-settings';
+import type { ExportResult, ExportMetadata, RenderSource, RenderAttempt } from './export-types';
+import { validatePngBlob } from './png-validation';
 
 const CANVAS_WIDTH = 1920;
 const CANVAS_HEIGHT = 1080;
@@ -61,11 +63,7 @@ async function getHtml2Canvas(): Promise<Html2CanvasFn> {
   return html2canvasLoader;
 }
 
-export interface ExportResult {
-  blob: Blob;
-  format: ExportFormat;
-  filename: string;
-}
+// ExportResult is now imported from ./export-types
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -249,10 +247,18 @@ async function generateSvgBlob(options: {
   return new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
 }
 
+/** Internal result from the browser image-generation pipeline. */
+interface ImageBlobResult {
+  blob: Blob;
+  renderSource: RenderSource;
+  fallbackReason: string | null;
+  attemptTrace: RenderAttempt[];
+}
+
 /**
- * 带 fallback 的图片生成
- * - SVG: 直接使用 snapdom 生成
- * - PNG: 优先使用 snapdom SVG 转 PNG，失败时回退到 html2canvas
+ * Browser-side image generation with metadata tracking.
+ * - SVG: snapdom only (no fallback needed).
+ * - PNG: snapdom → html2canvas fallback with structured trace.
  */
 async function generateImageBlob(options: {
   element: HTMLElement;
@@ -261,19 +267,28 @@ async function generateImageBlob(options: {
   scale: number;
   backgroundColor: string | null;
   format: ExportFormat;
-}): Promise<Blob> {
+}): Promise<ImageBlobResult> {
   const { format } = options;
+  const attemptTrace: RenderAttempt[] = [];
 
-  // SVG 格式：直接生成
+  // SVG format: snapdom only, no fallback chain
   if (format === 'svg') {
-    return await generateSvgBlob({
+    const t0 = performance.now();
+    const blob = await generateSvgBlob({
       element: options.element,
       scale: options.scale,
       backgroundColor: options.backgroundColor,
     });
+    attemptTrace.push({
+      renderer: 'snapdom',
+      success: true,
+      durationMs: Math.round(performance.now() - t0),
+    });
+    return { blob, renderSource: 'snapdom', fallbackReason: null, attemptTrace };
   }
 
-  // PNG 格式：优先使用 snapdom SVG 转 PNG
+  // PNG format: try snapdom first, fallback to html2canvas
+  const t0 = performance.now();
   try {
     const blob = await snapdomToPngBlob({
       element: options.element,
@@ -282,17 +297,31 @@ async function generateImageBlob(options: {
       scale: options.scale,
       backgroundColor: options.backgroundColor,
     });
-    // 基本有效性检查
-    if (blob.size > 1000) {
-      return blob;
+
+    // Decode-level validation instead of magic number check
+    const expectedWidth = Math.round(options.width * options.scale);
+    const expectedHeight = Math.round(options.height * options.scale);
+    const validation = await validatePngBlob(blob, { width: expectedWidth, height: expectedHeight });
+    const snapdomDuration = Math.round(performance.now() - t0);
+
+    if (validation.valid) {
+      attemptTrace.push({ renderer: 'snapdom', success: true, durationMs: snapdomDuration });
+      return { blob, renderSource: 'snapdom', fallbackReason: null, attemptTrace };
     }
-    console.warn('[export] snapdom PNG output suspiciously small, trying fallback');
+
+    const reason = `snapdom PNG validation failed: ${validation.reason}`;
+    console.warn(`[export] ${reason}`);
+    attemptTrace.push({ renderer: 'snapdom', success: false, failureReason: reason, durationMs: snapdomDuration });
   } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    const snapdomDuration = Math.round(performance.now() - t0);
     console.warn('[export] snapdom PNG failed, falling back to html2canvas:', e);
+    attemptTrace.push({ renderer: 'snapdom', success: false, failureReason: reason, durationMs: snapdomDuration });
   }
 
-  // 回退路径：使用 html2canvas
+  // Fallback: html2canvas
   console.info('[export] Using html2canvas fallback');
+  const t1 = performance.now();
   const canvas = await renderElementToCanvas({
     element: options.element,
     width: options.width,
@@ -300,7 +329,20 @@ async function generateImageBlob(options: {
     scale: options.scale,
     backgroundColor: options.backgroundColor,
   });
-  return await canvasToPngBlob(canvas);
+  const blob = await canvasToPngBlob(canvas);
+  attemptTrace.push({
+    renderer: 'html2canvas',
+    success: true,
+    durationMs: Math.round(performance.now() - t1),
+  });
+
+  const firstFailure = attemptTrace.find(a => !a.success);
+  return {
+    blob,
+    renderSource: 'html2canvas',
+    fallbackReason: firstFailure?.failureReason ?? 'snapdom failed',
+    attemptTrace,
+  };
 }
 
 /**
@@ -403,7 +445,7 @@ export async function generateImageFromPreview(
   }
 
   try {
-    const blob = await generateImageBlob({
+    const result = await generateImageBlob({
       element,
       width,
       height,
@@ -416,7 +458,13 @@ export async function generateImageFromPreview(
     const templateId = template.id || 'card';
     const filename = `${templateId}-${timestamp}.${format}`;
 
-    return { blob, format, filename };
+    const metadata: ExportMetadata = {
+      renderSource: result.renderSource,
+      fallbackReason: result.fallbackReason,
+      attemptTrace: result.attemptTrace,
+    };
+
+    return { blob: result.blob, format, filename, metadata };
   } finally {
     cleanup?.();
   }

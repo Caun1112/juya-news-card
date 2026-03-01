@@ -2,22 +2,29 @@ import { BOTTOM_RESERVED_PX } from './layout-calculator';
 import { readPublicEnv } from './runtime-env';
 import { DEFAULT_ICON_CDN_URL, DEFAULT_ICON_FALLBACK } from './icon-mapping';
 
-const STORAGE_KEY = 'p2v-global-settings-v3';
-const LEGACY_STORAGE_KEYS = ['p2v-global-settings-v2', 'p2v-global-settings-v1'] as const;
-const STORAGE_VERSION = 3 as const;
+const STORAGE_KEY = 'p2v-global-settings-v4';
+const LEGACY_STORAGE_KEYS = ['p2v-global-settings-v3', 'p2v-global-settings-v2', 'p2v-global-settings-v1'] as const;
+const STORAGE_VERSION = 4 as const;
 const MAX_ICON_CDN_URL_LENGTH = 2048;
 
 export type ExportFormat = 'png' | 'svg';
-export type PngRenderer = 'browser' | 'render-api';
+export type PngExportStrategy = 'strict-render-api' | 'strict-browser' | 'auto-fallback';
+
+const VALID_EXPORT_STRATEGIES: readonly PngExportStrategy[] = [
+  'strict-render-api',
+  'strict-browser',
+  'auto-fallback',
+];
 
 export const EXPORT_FORMAT_OPTIONS: { value: ExportFormat; label: string; description: string }[] = [
   { value: 'png', label: 'PNG', description: '通过 SVG 转换，兼容性最佳' },
   { value: 'svg', label: 'SVG', description: '矢量格式，体积小、可缩放' },
 ];
 
-export const PNG_RENDERER_OPTIONS: { value: PngRenderer; label: string; description: string }[] = [
-  { value: 'browser', label: 'Browser', description: '前端渲染（snapdom/html2canvas），无需后端 render-api' },
-  { value: 'render-api', label: 'Render API', description: '后端 Playwright 渲染，失败时自动回退前端' },
+export const PNG_EXPORT_STRATEGY_OPTIONS: { value: PngExportStrategy; label: string; description: string }[] = [
+  { value: 'strict-browser', label: 'Browser Only', description: '仅前端渲染（snapdom/html2canvas），无需后端' },
+  { value: 'strict-render-api', label: 'Render API Only', description: '仅后端 Playwright 渲染，失败时报错不回退' },
+  { value: 'auto-fallback', label: 'Auto Fallback', description: '优先后端，失败自动回退前端并通知' },
 ];
 
 export interface LlmGlobalSettings {
@@ -33,12 +40,12 @@ export interface IconMappingSettings {
 export interface AppGlobalSettings {
   bottomReservedPx: number;
   exportFormat: ExportFormat;
-  pngRenderer: PngRenderer;
+  pngExportStrategy: PngExportStrategy;
   llm: LlmGlobalSettings;
   iconMapping: IconMappingSettings;
 }
 
-type PersistedGlobalSettingsV3 = {
+type PersistedGlobalSettingsV4 = {
   version: typeof STORAGE_VERSION;
   overrides: Partial<AppGlobalSettings>;
 };
@@ -76,10 +83,14 @@ function resolveDefaultBaseURL(): string {
   return '/api';
 }
 
-function resolveDefaultPngRenderer(): PngRenderer {
+function resolveDefaultPngExportStrategy(): PngExportStrategy {
   const raw = readPublicEnv('VITE_PNG_RENDERER_DEFAULT').toLowerCase();
-  if (raw === 'render-api' || raw === 'backend') return 'render-api';
-  return 'browser';
+  if (raw === 'strict-render-api') return 'strict-render-api';
+  if (raw === 'strict-browser') return 'strict-browser';
+  if (raw === 'auto-fallback') return 'auto-fallback';
+  // Legacy env value compatibility
+  if (raw === 'render-api' || raw === 'backend') return 'auto-fallback';
+  return 'strict-browser';
 }
 
 function resolveDefaultIconCdnUrl(): string {
@@ -91,7 +102,7 @@ export function createDefaultGlobalSettings(): AppGlobalSettings {
   return {
     bottomReservedPx: BOTTOM_RESERVED_PX,
     exportFormat: 'png',
-    pngRenderer: resolveDefaultPngRenderer(),
+    pngExportStrategy: resolveDefaultPngExportStrategy(),
     llm: {
       baseURL: resolveDefaultBaseURL(),
     },
@@ -103,6 +114,10 @@ export function createDefaultGlobalSettings(): AppGlobalSettings {
   };
 }
 
+function isValidExportStrategy(value: unknown): value is PngExportStrategy {
+  return typeof value === 'string' && (VALID_EXPORT_STRATEGIES as readonly string[]).includes(value);
+}
+
 function sanitizeSettings(
   raw: Partial<AppGlobalSettings>,
   defaults: AppGlobalSettings = createDefaultGlobalSettings(),
@@ -112,16 +127,16 @@ function sanitizeSettings(
   const exportFormat = raw.exportFormat === 'png' || raw.exportFormat === 'svg'
     ? raw.exportFormat
     : defaults.exportFormat;
-  const pngRenderer = raw.pngRenderer === 'browser' || raw.pngRenderer === 'render-api'
-    ? raw.pngRenderer
-    : defaults.pngRenderer;
+  const pngExportStrategy = isValidExportStrategy(raw.pngExportStrategy)
+    ? raw.pngExportStrategy
+    : defaults.pngExportStrategy;
 
   const iconMappingRaw: Partial<IconMappingSettings> = raw.iconMapping ?? {};
 
   return {
     bottomReservedPx: clampNumber(raw.bottomReservedPx, defaults.bottomReservedPx, 0, 600, true),
     exportFormat,
-    pngRenderer,
+    pngExportStrategy,
     llm: {
       baseURL: nonEmptyTrimmedString(llmRaw.baseURL, defaults.llm.baseURL),
     },
@@ -174,6 +189,37 @@ function parsePersistedSettings(raw: string): Partial<AppGlobalSettings> | null 
   return null;
 }
 
+/**
+ * Migrate v3 overrides to v4 format.
+ * Maps: pngRenderer 'render-api' → pngExportStrategy 'auto-fallback',
+ *        pngRenderer 'browser'    → pngExportStrategy 'strict-browser'.
+ */
+function migrateV3Overrides(v3Overrides: Record<string, unknown>): Partial<AppGlobalSettings> {
+  const migrated = { ...v3Overrides } as Record<string, unknown>;
+  const legacyRenderer = v3Overrides.pngRenderer;
+  if (typeof legacyRenderer === 'string') {
+    delete migrated.pngRenderer;
+    migrated.pngExportStrategy =
+      legacyRenderer === 'render-api' ? 'auto-fallback' : 'strict-browser';
+  }
+  return migrated as Partial<AppGlobalSettings>;
+}
+
+function tryLoadV3Settings(): Partial<AppGlobalSettings> | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem('p2v-global-settings-v3');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed?.version === 3 && parsed.overrides && typeof parsed.overrides === 'object') {
+      return migrateV3Overrides(parsed.overrides as Record<string, unknown>);
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 function buildSettingsOverrides(
   settings: AppGlobalSettings,
   defaults: AppGlobalSettings,
@@ -186,8 +232,8 @@ function buildSettingsOverrides(
   if (settings.exportFormat !== defaults.exportFormat) {
     overrides.exportFormat = settings.exportFormat;
   }
-  if (settings.pngRenderer !== defaults.pngRenderer) {
-    overrides.pngRenderer = settings.pngRenderer;
+  if (settings.pngExportStrategy !== defaults.pngExportStrategy) {
+    overrides.pngExportStrategy = settings.pngExportStrategy;
   }
 
   const llmOverrides: Partial<LlmGlobalSettings> = {};
@@ -232,25 +278,29 @@ export function loadGlobalSettings(): AppGlobalSettings {
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      removeLegacySettings();
-      return defaults;
+    if (raw) {
+      const parsed = parsePersistedSettings(raw);
+      if (parsed) {
+        const normalized = sanitizeSettings(mergeWithDefaults(parsed, defaults), defaults);
+        removeLegacySettings();
+        return normalized;
+      }
+      // Invalid v4 data — remove it
+      try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
     }
 
-    const parsed = parsePersistedSettings(raw);
-    if (!parsed) {
-      try {
-        window.localStorage.removeItem(STORAGE_KEY);
-      } catch {
-        // ignore
-      }
+    // Try migrating from v3
+    const v3Migrated = tryLoadV3Settings();
+    if (v3Migrated) {
+      const normalized = sanitizeSettings(mergeWithDefaults(v3Migrated, defaults), defaults);
+      // Persist as v4 so migration only happens once
+      saveGlobalSettings(normalized);
       removeLegacySettings();
-      return defaults;
+      return normalized;
     }
-    const normalized = sanitizeSettings(mergeWithDefaults(parsed, defaults), defaults);
 
     removeLegacySettings();
-    return normalized;
+    return defaults;
   } catch (error) {
     console.warn('Failed to load global settings. Using defaults.', error);
     return defaults;
@@ -261,7 +311,7 @@ export function saveGlobalSettings(settings: AppGlobalSettings): AppGlobalSettin
   const defaults = createDefaultGlobalSettings();
   const normalized = sanitizeSettings(settings, defaults);
   const overrides = buildSettingsOverrides(normalized, defaults);
-  const payload: PersistedGlobalSettingsV3 = {
+  const payload: PersistedGlobalSettingsV4 = {
     version: STORAGE_VERSION,
     overrides,
   };
