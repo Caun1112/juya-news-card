@@ -9,10 +9,7 @@ const PNG_HEADER = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
  */
 const MIN_PNG_SIZE = 67;
 
-export interface PngValidationResult {
-  valid: boolean;
-  reason?: string;
-}
+export type PngValidationResult = { valid: true } | { valid: false; reason: string };
 
 /**
  * Validates a PNG blob using three levels of checking:
@@ -46,8 +43,19 @@ export async function validatePngBlob(
     const { width, height } = await new Promise<{ width: number; height: number }>(
       (resolve, reject) => {
         const img = new Image();
-        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-        img.onerror = () => reject(new Error('Failed to decode PNG image'));
+        const timer = setTimeout(() => {
+          img.onload = null;
+          img.onerror = null;
+          reject(new Error('PNG decode timed out (5s)'));
+        }, 5000);
+        img.onload = () => {
+          clearTimeout(timer);
+          resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        };
+        img.onerror = () => {
+          clearTimeout(timer);
+          reject(new Error('Failed to decode PNG image'));
+        };
         img.src = url;
       },
     );

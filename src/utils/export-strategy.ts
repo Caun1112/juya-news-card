@@ -42,6 +42,10 @@ export async function executeExport(options: ExportOptions): Promise<ExportResul
       return executeBrowserExport(options);
     case 'auto-fallback':
       return executeAutoFallback(options);
+    default: {
+      const _exhaustive: never = strategy;
+      throw new Error(`Unknown PNG export strategy: ${_exhaustive}`);
+    }
   }
 }
 
@@ -63,13 +67,13 @@ async function executeBrowserExport(options: ExportOptions): Promise<ExportResul
 
 /** Render API only — fail loudly, no fallback. */
 async function executeStrictRenderApi(options: ExportOptions): Promise<ExportResult> {
-  const t0 = performance.now();
   const { generatePngBlobFromRenderApi } = await import('./export-render-api-image');
+  const t0 = performance.now();
 
   const blob = await generatePngBlobFromRenderApi({
     templateId: options.templateId,
     data: options.data,
-    dpr: 2,
+    dpr: (options.pixelRatio ?? 2) >= 2 ? 2 : 1,
   });
 
   const durationMs = Math.round(performance.now() - t0);
@@ -92,13 +96,14 @@ async function executeAutoFallback(options: ExportOptions): Promise<ExportResult
   const renderApiTrace: RenderAttempt[] = [];
 
   // Try render-api first
-  const t0 = performance.now();
+  let t0 = performance.now();
   try {
     const { generatePngBlobFromRenderApi } = await import('./export-render-api-image');
+    t0 = performance.now();
     const blob = await generatePngBlobFromRenderApi({
       templateId: options.templateId,
       data: options.data,
-      dpr: 2,
+      dpr: (options.pixelRatio ?? 2) >= 2 ? 2 : 1,
     });
 
     const durationMs = Math.round(performance.now() - t0);

@@ -8,13 +8,13 @@ const STORAGE_VERSION = 4 as const;
 const MAX_ICON_CDN_URL_LENGTH = 2048;
 
 export type ExportFormat = 'png' | 'svg';
-export type PngExportStrategy = 'strict-render-api' | 'strict-browser' | 'auto-fallback';
-
-const VALID_EXPORT_STRATEGIES: readonly PngExportStrategy[] = [
+const VALID_EXPORT_STRATEGIES = [
   'strict-render-api',
   'strict-browser',
   'auto-fallback',
-];
+] as const;
+
+export type PngExportStrategy = (typeof VALID_EXPORT_STRATEGIES)[number];
 
 export const EXPORT_FORMAT_OPTIONS: { value: ExportFormat; label: string; description: string }[] = [
   { value: 'png', label: 'PNG', description: '通过 SVG 转换，兼容性最佳' },

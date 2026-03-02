@@ -63,8 +63,6 @@ async function getHtml2Canvas(): Promise<Html2CanvasFn> {
   return html2canvasLoader;
 }
 
-// ExportResult is now imported from ./export-types
-
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }

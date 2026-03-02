@@ -284,11 +284,11 @@ const App: React.FC = () => {
   const handleDownload = async () => {
     if (!data) return;
     if (!currentTemplate) {
-      alert('模板仍在加载，请稍后重试。');
+      showToast('模板仍在加载，请稍后重试。', 'warning');
       return;
     }
     if (!currentTemplate.downloadable) {
-      alert(`"${templateDisplayName}" 模板暂不支持下载。`);
+      showToast(`"${templateDisplayName}" 模板暂不支持下载。`, 'warning');
       return;
     }
 

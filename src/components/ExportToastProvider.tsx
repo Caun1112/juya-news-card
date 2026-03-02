@@ -10,19 +10,16 @@ const ExportToastContext = createContext<ExportToastContextValue | null>(null);
 const AUTO_HIDE_MS = 6000;
 
 export function ExportToastProvider({ children }: { children: ReactNode }) {
+  const [toastKey, setToastKey] = useState(0);
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [severity, setSeverity] = useState<AlertColor>('info');
 
   const showToast = useCallback((msg: string, sev: AlertColor = 'info') => {
-    // Close any existing toast first so the new one triggers fresh
-    setOpen(false);
-    // Use microtask to ensure state flush before re-opening
-    queueMicrotask(() => {
-      setMessage(msg);
-      setSeverity(sev);
-      setOpen(true);
-    });
+    setMessage(msg);
+    setSeverity(sev);
+    setToastKey(prev => prev + 1);
+    setOpen(true);
   }, []);
 
   const handleClose = useCallback((_event?: React.SyntheticEvent | Event, reason?: string) => {
@@ -34,6 +31,7 @@ export function ExportToastProvider({ children }: { children: ReactNode }) {
     <ExportToastContext.Provider value={{ showToast }}>
       {children}
       <Snackbar
+        key={toastKey}
         open={open}
         autoHideDuration={AUTO_HIDE_MS}
         onClose={handleClose}
