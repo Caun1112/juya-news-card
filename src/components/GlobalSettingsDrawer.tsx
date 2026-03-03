@@ -169,6 +169,7 @@ const GlobalSettingsDrawer: React.FC<GlobalSettingsDrawerProps> = ({
           <Select
             value={settings.exportFormat}
             label="Image Format"
+            renderValue={(value) => EXPORT_FORMAT_OPTIONS.find(o => o.value === value)?.label ?? value}
             onChange={(event) =>
               onUpdateSettings(prev => ({
                 ...prev,
@@ -193,6 +194,7 @@ const GlobalSettingsDrawer: React.FC<GlobalSettingsDrawerProps> = ({
           <Select
             value={settings.pngExportStrategy}
             label="PNG Export Strategy"
+            renderValue={(value) => PNG_EXPORT_STRATEGY_OPTIONS.find(o => o.value === value)?.label ?? value}
             onChange={(event) =>
               onUpdateSettings(prev => ({
                 ...prev,
