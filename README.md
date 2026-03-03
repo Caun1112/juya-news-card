@@ -8,7 +8,7 @@
 ## 特性
 - 输入新闻文本，服务端调用 LLM 生成结构化卡片
 - 174 个主题模板统一渲染（`templates/`）
-- PNG 导出支持两种模式：浏览器渲染 / 后端 Playwright 渲染
+- PNG 导出支持三种策略：仅浏览器 / 仅后端 Playwright / 后端优先失败回退浏览器
 - Next 一体化运行：页面与 API 同进程（`/api/generate`、`/api/render`、`/api/config`）
 
 ## 项目组成（Next 一体化 / CLI / Skill / Prompt）
@@ -125,6 +125,7 @@ ALLOW_UNAUTHENTICATED_WRITE=false
 - 需要按环境覆盖时再创建 `.env.docker`（仅放差异项）。
 - 浏览器端变量优先使用 `NEXT_PUBLIC_*`（兼容读取 `VITE_*`）。
 - UI 里的 `App Backend API Base URL` 对应 `NEXT_PUBLIC_API_BASE_URL`（或 `VITE_API_BASE_URL` 兼容名），表示本项目后端地址（用于 `/api/generate`），不是上游 LLM 的 `LLM_API_BASE_URL`。
+- 默认 PNG 导出策略可用 `NEXT_PUBLIC_PNG_EXPORT_STRATEGY` 配置（`strict-browser` / `strict-render-api` / `auto-fallback`）；填错会直接报错，避免静默回退。
 - `LLM_*` 给服务端调用上游模型用。
 - UI 的 LLM 参数为后端只读展示（来自 `/api/config`）；`localStorage` 仅缓存布局/导出/图标映射和 App Backend API Base URL。
 - 其余高级参数（LLM 超时/重试、输入长度、Chromium flags）都已给默认值，按需再去 `.env.example` 取消注释即可。

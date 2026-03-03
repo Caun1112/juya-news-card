@@ -85,10 +85,11 @@ function resolveDefaultBaseURL(): string {
 
 function resolveDefaultPngExportStrategy(): PngExportStrategy {
   const raw = readPublicEnv('VITE_PNG_EXPORT_STRATEGY').toLowerCase();
-  if (raw === 'strict-render-api') return 'strict-render-api';
-  if (raw === 'strict-browser') return 'strict-browser';
-  if (raw === 'auto-fallback') return 'auto-fallback';
-  return 'strict-browser';
+  if (!raw) return 'strict-browser';
+  if (isValidExportStrategy(raw)) return raw;
+  throw new Error(
+    `Invalid PNG export strategy "${raw}". Set NEXT_PUBLIC_PNG_EXPORT_STRATEGY (or VITE_PNG_EXPORT_STRATEGY) to one of: ${VALID_EXPORT_STRATEGIES.join(', ')}.`,
+  );
 }
 
 function resolveDefaultIconCdnUrl(): string {

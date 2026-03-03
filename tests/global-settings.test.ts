@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createDefaultGlobalSettings, loadGlobalSettings, saveGlobalSettings } from '../src/utils/global-settings';
 
-const STORAGE_KEY = 'p2v-global-settings-v3';
+const STORAGE_KEY = 'p2v-global-settings-v4';
+const LEGACY_STORAGE_KEY_V3 = 'p2v-global-settings-v3';
 
 type MemoryWindow = {
   location: { origin: string };
@@ -46,7 +47,7 @@ function uninstallWindow(): void {
 test('loadGlobalSettings ignores legacy payload and clears it', () => {
   const windowMock = installWindow();
   try {
-    windowMock.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    windowMock.localStorage.setItem(LEGACY_STORAGE_KEY_V3, JSON.stringify({
       bottomReservedPx: 123,
       llm: {
         baseURL: 'http://127.0.0.1:8080/api',
@@ -63,13 +64,14 @@ test('loadGlobalSettings ignores legacy payload and clears it', () => {
     const defaults = createDefaultGlobalSettings();
     const loaded = loadGlobalSettings();
     assert.deepEqual(loaded, defaults);
+    assert.equal(windowMock.localStorage.getItem(LEGACY_STORAGE_KEY_V3), null);
     assert.equal(windowMock.localStorage.getItem(STORAGE_KEY), null);
 
     saveGlobalSettings(loaded);
     const raw = windowMock.localStorage.getItem(STORAGE_KEY);
     assert.ok(raw);
     const parsed = JSON.parse(raw);
-    assert.equal(parsed.version, 3);
+    assert.equal(parsed.version, 4);
     assert.deepEqual(parsed.overrides, {});
   } finally {
     uninstallWindow();
@@ -97,7 +99,7 @@ test('saveGlobalSettings persists overrides only so defaults can move with runti
     const raw = windowMock.localStorage.getItem(STORAGE_KEY);
     assert.ok(raw);
     const parsed = JSON.parse(raw);
-    assert.equal(parsed.version, 3);
+    assert.equal(parsed.version, 4);
     assert.deepEqual(parsed.overrides, {});
 
     windowMock.location.origin = 'http://origin-b.test:3000';
@@ -176,5 +178,37 @@ test('saveGlobalSettings clamps icon CDN url length', () => {
     assert.ok(raw);
   } finally {
     uninstallWindow();
+  }
+});
+
+test('createDefaultGlobalSettings throws when NEXT_PUBLIC_PNG_EXPORT_STRATEGY is invalid', () => {
+  const previous = process.env.NEXT_PUBLIC_PNG_EXPORT_STRATEGY;
+  process.env.NEXT_PUBLIC_PNG_EXPORT_STRATEGY = 'nonsense';
+  try {
+    assert.throws(
+      () => createDefaultGlobalSettings(),
+      /PNG_EXPORT_STRATEGY/,
+    );
+  } finally {
+    if (typeof previous === 'string') {
+      process.env.NEXT_PUBLIC_PNG_EXPORT_STRATEGY = previous;
+    } else {
+      delete process.env.NEXT_PUBLIC_PNG_EXPORT_STRATEGY;
+    }
+  }
+});
+
+test('createDefaultGlobalSettings normalizes NEXT_PUBLIC_PNG_EXPORT_STRATEGY to lower-case', () => {
+  const previous = process.env.NEXT_PUBLIC_PNG_EXPORT_STRATEGY;
+  process.env.NEXT_PUBLIC_PNG_EXPORT_STRATEGY = 'AUTO-FALLBACK';
+  try {
+    const defaults = createDefaultGlobalSettings();
+    assert.equal(defaults.pngExportStrategy, 'auto-fallback');
+  } finally {
+    if (typeof previous === 'string') {
+      process.env.NEXT_PUBLIC_PNG_EXPORT_STRATEGY = previous;
+    } else {
+      delete process.env.NEXT_PUBLIC_PNG_EXPORT_STRATEGY;
+    }
   }
 });
