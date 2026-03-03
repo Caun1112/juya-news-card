@@ -84,12 +84,10 @@ function resolveDefaultBaseURL(): string {
 }
 
 function resolveDefaultPngExportStrategy(): PngExportStrategy {
-  const raw = readPublicEnv('VITE_PNG_RENDERER_DEFAULT').toLowerCase();
+  const raw = readPublicEnv('VITE_PNG_EXPORT_STRATEGY').toLowerCase();
   if (raw === 'strict-render-api') return 'strict-render-api';
   if (raw === 'strict-browser') return 'strict-browser';
   if (raw === 'auto-fallback') return 'auto-fallback';
-  // Legacy env value compatibility
-  if (raw === 'render-api' || raw === 'backend') return 'auto-fallback';
   return 'strict-browser';
 }
 
