@@ -39,6 +39,7 @@
     "@types/minimist": "^1.2.5",
     "@zumer/snapdom": "^2.0.2",
     "html2canvas": "^1.4.1",
+    "katex": "^0.16.40",
     "minimist": "^1.2.8",
     "next": "15.4.11",
     "openai": "^4.83.0",
@@ -47,6 +48,7 @@
     "react-dom": "^19.2.3"
   },
   "devDependencies": {
+    "@types/katex": "^0.16.8",
     "@types/node": "^22.14.0",
     "dotenv": "^17.2.3",
     "tsx": "^4.21.0",
